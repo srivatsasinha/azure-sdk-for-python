@@ -26,7 +26,7 @@ from azure.ai.ml.exceptions import ErrorCategory, ErrorTarget, ValidationExcepti
 from ._identity import IdentityConfiguration
 from ._schedule import ComputeSchedules
 from ._setup_scripts import SetupScripts
-from ._custom_services import CustomApplications
+from ._custom_services import CustomApplication
 
 
 class ComputeInstanceSshSettings:
@@ -150,11 +150,6 @@ class ComputeInstance(Compute):
         self._last_operation = kwargs.pop("last_operation", None)
         self._services = kwargs.pop("services", None)
         self.custom_apps = kwargs.pop("custom_apps", None)
-        custom_services = None
-        if self.custom_apps:
-            custom_apps_obj_list = list(map(lambda custom_apps: CustomApplications(custom_apps), self.custom_apps))
-            if _validate_custom_applications(custom_apps_obj_list):
-                custom_services = list(map(lambda customAppObj: customAppObj._to_rest_object(), custom_apps_obj_list))
         super().__init__(
             name=name,
             location=kwargs.pop("location", None),
@@ -230,13 +225,18 @@ class ComputeInstance(Compute):
                     tenant_id=self.create_on_behalf_of.user_tenant_id,
                 )
             )
-
+        custom_services = None
+        if self.custom_apps:
+            custom_apps_obj_list = list(map(lambda custom_apps: CustomApplication(custom_apps), self.custom_apps))
+            if CustomApplication._validate_custom_applications_list(custom_apps_obj_list):
+                custom_services = list(map(lambda customAppObj: customAppObj._to_rest_object(), custom_apps_obj_list))
         compute_instance_prop = ComputeInstanceProperties(
             vm_size=self.size if self.size else ComputeDefaults.VMSIZE,
             subnet=subnet_resource,
             ssh_settings=ssh_settings,
             personal_compute_instance_settings=personal_compute_instance_settings,
             idle_time_before_shutdown=self.idle_time_before_shutdown,
+            custom_services=custom_services
         )
         compute_instance_prop.schedules = self.schedules._to_rest_object() if self.schedules else None
         compute_instance_prop.setup_scripts = self.setup_scripts._to_rest_object() if self.setup_scripts else None
@@ -349,24 +349,3 @@ def _ssh_public_access_to_bool(value: str) -> bool:
     if value.lower() == "enabled":
         return True
     return None
-
-
-def _validate_custom_applications(custom_app_obj_list):
-    unique_error = "Value of {} is should be unique accross all custom applications"
-    all_application_names = list(map(lambda apps: apps.custom_app["applicationName"], custom_app_obj_list))
-    all_published_ports = list(map(lambda apps: apps.custom_app["publishedPort"], custom_app_obj_list))
-    if len(set(all_published_ports)) != len(all_published_ports):
-        raise ValidationException(
-            message=unique_error.format("publishedPort"),
-            target=ErrorTarget.COMPUTE,
-            no_personal_data_message=unique_error.format("publishedPort"),
-            error_category=ErrorCategory.USER_ERROR,
-        )
-    if len(set(all_application_names)) != len(all_application_names):
-        raise ValidationException(
-            message=unique_error.format("applicationName"),
-            target=ErrorTarget.COMPUTE,
-            no_personal_data_message=unique_error.format("applicationName"),
-            error_category=ErrorCategory.USER_ERROR,
-        )
-    return True

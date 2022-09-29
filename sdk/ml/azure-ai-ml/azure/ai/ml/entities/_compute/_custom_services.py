@@ -6,8 +6,8 @@
 ## This is temprory class to work with custom applications programatically.
 ## This is a private preview work.
 
+from __future__ import annotations
 import re
-
 from azure.ai.ml._restclient.v2022_10_01_preview.models import (
     CustomService,
     Docker,
@@ -26,7 +26,7 @@ from azure.ai.ml.exceptions import ErrorCategory, ErrorTarget, ValidationExcepti
 
 
 @experimental
-class CustomApplications(RestTranslatableMixin):
+class CustomApplication(RestTranslatableMixin):
 
     APPLICATION_NAME = "applicationName"
     TARGET_PORT = "targetPort"
@@ -220,3 +220,25 @@ class CustomApplications(RestTranslatableMixin):
             for varname, varvalue in obj.environment_variables.items()
         ]
         return custom_app
+    
+    @staticmethod
+    def  _validate_custom_applications_list(custom_apps: list[CustomApplication]) -> bool:
+        unique_error = "Value of {} is should be unique accross all custom applications"
+        all_application_names = list(map(lambda apps: apps.custom_app["applicationName"], custom_apps))
+        all_published_ports = list(map(lambda apps: apps.custom_app["publishedPort"], custom_apps))
+        if len(set(all_published_ports)) != len(all_published_ports):
+            raise ValidationException(
+                message=unique_error.format("publishedPort"),
+                target=ErrorTarget.COMPUTE,
+                no_personal_data_message=unique_error.format("publishedPort"),
+                error_category=ErrorCategory.USER_ERROR,
+            )
+        if len(set(all_application_names)) != len(all_application_names):
+            raise ValidationException(
+                message=unique_error.format("applicationName"),
+                target=ErrorTarget.COMPUTE,
+                no_personal_data_message=unique_error.format("applicationName"),
+                error_category=ErrorCategory.USER_ERROR,
+            )
+        return True
+
